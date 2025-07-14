@@ -70,11 +70,23 @@ async def get_current_user(
     
     # Try to get token from cookie first
     cookie_token = request.cookies.get("access_token")
-    if cookie_token:
-        # Remove "Bearer " prefix if present
-        token = cookie_token.replace("Bearer ", "")
     
-    # If no token from either source, raise exception
+    # Try to get token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    header_token = None
+    if auth_header and auth_header.startswith("Bearer "):
+        header_token = auth_header.replace("Bearer ", "")
+    
+    # Use cookie token first, then header token, then the token from oauth2_scheme
+    if cookie_token:
+        token = cookie_token
+    elif header_token:
+        token = header_token
+    elif token:
+        # Remove "Bearer " prefix if present from oauth2_scheme
+        token = token.replace("Bearer ", "")
+    
+    # If no token from any source, raise exception
     if not token:
         raise credentials_exception
     
@@ -89,6 +101,7 @@ async def get_current_user(
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise credentials_exception
+    
     return user
 
 async def get_current_active_user(current_user: User = Depends(get_current_user)):

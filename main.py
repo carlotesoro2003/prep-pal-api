@@ -62,16 +62,24 @@ def login_for_access_token(
     # Set httpOnly cookie
     response.set_cookie(
         key="access_token",
-        value=f"Bearer {access_token}",
-        httponly=True,
-        secure=False,  # Set to True in production with HTTPS
+        value=access_token,
+        httponly=False,  # Set to False so JavaScript can read it
+        secure=False,
         samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/"
     )
     
-    print(f"Setting cookie with token: {access_token[:20]}...")  # Debug log
-    return {"message": "Login successful"}
+    print(f"Setting cookie with token: {access_token[:20]}...")
+    
+    # Return token in response body
+    response_data = {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "message": "Login successful"
+    }
+    print(f"Returning response: {response_data}")
+    return response_data
 
 # Current user endpoint
 @app.get("/users/me", response_model=schemas.UserResponse)
@@ -174,60 +182,31 @@ def protected_route(current_user: models.User = Depends(get_current_user)):
 def create_question(
     question: schemas.QuestionCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    """Create a new question"""
-    # Validate category exists if provided
-    if question.category_id:
-        category = services.get_question_category_by_id(db, question.category_id)
-        if not category:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Category does not exist"
-            )
-    
-    return services.create_question(db, question, created_by=current_user.id)
+    current_user : models.User = Depends(get_current_user)
+) : 
+    return services.create_question(db, question, current_user.id)
 
+    
 @app.get("/questions", response_model=schemas.QuestionListResponse)
 def get_questions(
-    page: int = 1,
-    per_page: int = 10,
-    category_id: Optional[int] = None,
-    difficulty: Optional[str] = None,
-    search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Get questions with optional filtering and pagination"""
-    # Validate pagination parameters
-    if page < 1:
-        page = 1
-    if per_page < 1 or per_page > 100:
-        per_page = 10
+    """Get all questions without filtering and pagination"""
     
-    # Calculate offset
-    skip = (page - 1) * per_page
+    # Call service without any parameters to get all questions
+    questions, total = services.get_questions(db)
     
-    # Get questions
-    questions, total = services.get_questions(
-        db, 
-        skip=skip, 
-        limit=per_page,
-        category_id=category_id,
-        difficulty=difficulty,
-        search=search
-    )
-    
-    # Calculate total pages
-    total_pages = math.ceil(total / per_page) if total > 0 else 1
+    # Debug logging
+    print(f"API returning: {len(questions)} questions")
+    print(f"Question IDs: {[q.id for q in questions]}")
     
     return {
         "questions": questions,
         "total": total,
-        "page": page,
-        "per_page": per_page,
-        "total_pages": total_pages
+        "page": 1,
+        "per_page": total,  # Return all questions in one page
+        "total_pages": 1
     }
-
 @app.get("/questions/{question_id}", response_model=schemas.QuestionResponse)
 def get_question(
     question_id: int,

@@ -14,6 +14,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
 
+    
     @field_validator('password')  
     @classmethod
     def validate_password(cls, value: str): 
@@ -197,6 +198,7 @@ class QuestionBase(BaseModel):
 
 class QuestionCreate(QuestionBase):
     test_cases: Optional[List[TestCaseCreate]] = []
+    tags: Optional[List[TagCreate]] = []
 
 class QuestionUpdate(BaseModel):
     title: Optional[str] = None
@@ -212,7 +214,7 @@ class QuestionUpdate(BaseModel):
     is_public: Optional[bool] = None
 
 class QuestionResponse(QuestionBase):
-    id: int
+    id: int 
     created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime

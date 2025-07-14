@@ -185,24 +185,81 @@ def delete_test_case(db: Session, test_case_id: int) -> bool:
     return True
 
 # Question Services - WITH PROPER EAGER LOADING
-def create_question(db: Session, question: QuestionCreate, created_by: int) -> Question:
-    """Create a new question with test cases"""
-    # Extract test cases before creating question
-    test_cases_data = question.test_cases or []
-    question_data = question.dict(exclude={"test_cases"})
+def create_question(
+    db: Session, 
+    question_data: QuestionCreate, 
+    created_by: int
+) -> Question:
+    """Create a question with tags and test cases"""
     
     # Create the question
-    db_question = Question(**question_data, created_by=created_by)
-    db.add(db_question)
+    question = Question(
+        title=question_data.title,
+        description=question_data.description,
+        category_id=question_data.category_id,
+        difficulty=question_data.difficulty,
+        question_type=question_data.question_type,
+        starter_code=question_data.starter_code,
+        solution_code=question_data.solution_code,
+        time_limit=question_data.time_limit,
+        memory_limit=question_data.memory_limit,
+        status=question_data.status,
+        is_public=question_data.is_public,
+        created_by=created_by
+    )
+    
+    db.add(question)
+    db.flush()  # Get the question ID
+    
+    # Add test cases
+    if question_data.test_cases:
+        for test_case_data in question_data.test_cases:
+            test_case = TestCase(
+                question_id=question.id,
+                input_data=test_case_data.input_data,
+                expected_output=test_case_data.expected_output,
+                is_sample=test_case_data.is_sample,
+                points=test_case_data.points,
+                description=test_case_data.description
+            )
+            db.add(test_case)
+    
+    # Add tags
+    if question_data.tags:
+        for tag_data in question_data.tags:
+            # Check if tag exists
+            tag = db.query(Tag).filter(Tag.name == tag_data.name).first()
+            if not tag:
+                tag = Tag(name=tag_data.name)
+                db.add(tag)
+                db.flush()
+            
+            # Create question-tag relationship
+            question_tag = QuestionTag(
+                question_id=question.id,
+                tag_id=tag.id
+            )
+            db.add(question_tag)
+    
     db.commit()
-    db.refresh(db_question)
+    db.refresh(question)
     
-    # Create test cases if provided
-    for test_case_data in test_cases_data:
-        create_test_case(db, test_case_data, db_question.id)
+    # Load relationships
+    question = db.query(Question).options(
+        joinedload(Question.category),
+        selectinload(Question.test_cases)
+    ).filter(Question.id == question.id).first()
     
-    # Return question with all related data
-    return get_question_by_id(db, db_question.id)
+    # Load tags
+    tag_objs = (
+        db.query(Tag)
+        .join(QuestionTag, Tag.id == QuestionTag.tag_id)
+        .filter(QuestionTag.question_id == question.id)
+        .all()
+    )
+    question.tags = tag_objs
+    
+    return question
 
 def get_question_by_id(db: Session, question_id: int) -> Optional[Question]:
     question = db.query(Question).options(
@@ -223,69 +280,43 @@ def get_question_by_id(db: Session, question_id: int) -> Optional[Question]:
 def get_questions(
     db: Session, 
     skip: int = 0, 
-    limit: int = 100,
+    limit: int = 10,
     category_id: Optional[int] = None,
     difficulty: Optional[str] = None,
-    question_type: Optional[str] = None,
-    status: Optional[str] = None,
-    created_by: Optional[int] = None,
     search: Optional[str] = None,
-    is_public: Optional[bool] = None
+    status: Optional[str] = None
 ) -> Tuple[List[Question], int]:
-    """Get questions with filtering and eager loading"""
-    # Base query with eager loading
+    """Get all questions without filtering and pagination"""
+    
+    # Build the base query
     query = db.query(Question).options(
         joinedload(Question.category),
         selectinload(Question.test_cases)
     )
     
-    # Build filters list
-    filters = []
-    
-    if category_id:
-        filters.append(Question.category_id == category_id)
-    if difficulty:
-        filters.append(Question.difficulty == difficulty)
-    if question_type:
-        filters.append(Question.question_type == question_type)
-    if status:
-        filters.append(Question.status == status)
-    else:
-        filters.append(Question.status == "published")  # Default to published
-    if created_by:
-        filters.append(Question.created_by == created_by)
-    if is_public is not None:
-        filters.append(Question.is_public == is_public)
-    if search:
-        search_term = f"%{search}%"
-        filters.append(
-            or_(
-                Question.title.ilike(search_term),
-                Question.description.ilike(search_term)
-            )
-        )
-    
-    # Apply all filters at once
-    if filters:
-        query = query.filter(and_(*filters))
-    
-    # Order by creation date
-    query = query.order_by(desc(Question.created_at))
+    # Remove all filters - just get all questions
+    # No filters applied
     
     # Get total count
     total = query.count()
     
-    # Apply pagination
-    questions = query.offset(skip).limit(limit).all()
-
-    for q in questions:
+    # Get all questions without pagination, ordered by creation date
+    questions = query.order_by(desc(Question.created_at)).all()
+    
+    # Debug logging
+    print(f"Total questions found: {total}")
+    print(f"Questions returned: {len(questions)}")
+    print(f"Question IDs: {[q.id for q in questions]}")
+    
+    # Add tags to questions
+    for question in questions:
         tag_objs = (
             db.query(Tag)
             .join(QuestionTag, Tag.id == QuestionTag.tag_id)
-            .filter(QuestionTag.question_id == q.id)
+            .filter(QuestionTag.question_id == question.id)
             .all()
         )
-        q.tags = tag_objs
+        question.tags = tag_objs
     
     return questions, total
 
