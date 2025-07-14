@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional 
+from typing import Optional, List
 from datetime import datetime   
+from enum import Enum
 
 # Schemas for User 
 class UserBase(BaseModel):
@@ -85,3 +86,185 @@ class PasswordRestConfirm(BaseModel):
     
 class PasswordResetResponse(BaseModel):
     message: str
+
+# Enums for better validation
+class QuestionType(str, Enum):
+    theory = "theory"
+    coding = "coding"
+    multiple_choice = "multiple_choice"
+
+class QuestionStatus(str, Enum):
+    draft = "draft"
+    published = "published"
+    archived = "archived"
+
+class Difficulty(str, Enum):
+    easy = "easy"
+    medium = "medium"
+    hard = "hard"
+
+# Question Category Schemas
+class QuestionCategoryBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    icon: Optional[str] = None
+
+class QuestionCategoryCreate(QuestionCategoryBase):
+    pass
+
+class QuestionCategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
+
+class QuestionCategoryResponse(QuestionCategoryBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class QuestionCategoryListResponse(BaseModel):
+    categories: List[QuestionCategoryResponse]
+    total: int
+
+# Test Case Schemas
+class TestCaseBase(BaseModel):
+    input_data: str
+    expected_output: str
+    is_sample: bool = False
+    points: int = 1
+    description: Optional[str] = None
+
+class TestCaseCreate(TestCaseBase):
+    pass
+
+class TestCaseUpdate(BaseModel):
+    input_data: Optional[str] = None
+    expected_output: Optional[str] = None
+    is_sample: Optional[bool] = None
+    points: Optional[int] = None
+    description: Optional[str] = None
+
+class TestCaseResponse(TestCaseBase):
+    id: int
+    question_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Tag Schemas
+class TagBase(BaseModel):
+    name: str
+
+class TagCreate(TagBase):
+    pass
+
+class TagResponse(TagBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+# Question Tag Schemas
+class QuestionTagCreate(BaseModel):
+    question_id: int
+    tag_id: int
+
+class QuestionTagResponse(BaseModel):
+    question_id: int
+    tag_id: int
+    created_at: datetime
+    tag: TagResponse
+
+    class Config:
+        from_attributes = True
+
+# Question Schemas
+class QuestionBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    category_id: Optional[int] = None
+    difficulty: Optional[Difficulty] = None
+    question_type: QuestionType = QuestionType.theory
+    starter_code: Optional[str] = None
+    solution_code: Optional[str] = None
+    time_limit: int = 5
+    memory_limit: int = 256
+    status: QuestionStatus = QuestionStatus.draft
+    is_public: bool = True
+
+class QuestionCreate(QuestionBase):
+    test_cases: Optional[List[TestCaseCreate]] = []
+
+class QuestionUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category_id: Optional[int] = None
+    difficulty: Optional[Difficulty] = None
+    question_type: Optional[QuestionType] = None
+    starter_code: Optional[str] = None
+    solution_code: Optional[str] = None
+    time_limit: Optional[int] = None
+    memory_limit: Optional[int] = None
+    status: Optional[QuestionStatus] = None
+    is_public: Optional[bool] = None
+
+class QuestionResponse(QuestionBase):
+    id: int
+    created_by: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    category: Optional[QuestionCategoryResponse] = None
+    test_cases: List[TestCaseResponse] = []
+    tags: List[TagResponse] = []
+    class Config:
+        from_attributes = True
+
+class QuestionListResponse(BaseModel):
+    questions: List[QuestionResponse]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+
+# User Answer Schemas
+class UserAnswerBase(BaseModel):
+    answer_text: Optional[str] = None
+    source_code: Optional[str] = None
+    language: Optional[str] = None
+    time_taken_seconds: Optional[int] = None
+
+class UserAnswerCreate(UserAnswerBase):
+    question_id: int
+
+class UserAnswerUpdate(BaseModel):
+    answer_text: Optional[str] = None
+    source_code: Optional[str] = None
+    language: Optional[str] = None
+
+class UserAnswerResponse(UserAnswerBase):
+    id: int
+    user_id: int
+    question_id: int
+    is_correct: Optional[bool] = None
+    score: int = 0
+    submitted_at: datetime
+    execution_time: Optional[int] = None
+    memory_used: Optional[int] = None
+    test_cases_passed: int = 0
+    total_test_cases: int = 0
+    error_message: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class UserAnswerListResponse(BaseModel):
+    answers: List[UserAnswerResponse]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+
+
