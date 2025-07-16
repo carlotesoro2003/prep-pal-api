@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime   
 from enum import Enum
 
@@ -233,13 +233,17 @@ class QuestionListResponse(BaseModel):
 
 # User Answer Schemas
 class UserAnswerBase(BaseModel):
-    answer_text: Optional[str] = None
+    answer_content: Optional[str] = None
     source_code: Optional[str] = None
     language: Optional[str] = None
     time_taken_seconds: Optional[int] = None
 
 class UserAnswerCreate(UserAnswerBase):
     question_id: int
+    answer_content: str
+    answer_type: str = "coding" 
+    code_language: Optional[str] = None
+    test_results: Optional[List[Dict[str, Any]]] = None  
 
 class UserAnswerUpdate(BaseModel):
     answer_text: Optional[str] = None
@@ -250,14 +254,20 @@ class UserAnswerResponse(UserAnswerBase):
     id: int
     user_id: int
     question_id: int
-    is_correct: Optional[bool] = None
-    score: int = 0
-    submitted_at: datetime
+    answer_content: str
+    answer_type: str
+    code_language: Optional[str] = None
+    test_results: Optional[List[Dict[str, Any]]] = None
+    score: Optional[int] = None
+    is_correct: bool
+    feedback: Optional[str] = None
     execution_time: Optional[int] = None
     memory_used: Optional[int] = None
-    test_cases_passed: int = 0
-    total_test_cases: int = 0
+    test_cases_passed: Optional[int] = None
+    total_test_cases: Optional[int] = None
     error_message: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -269,4 +279,23 @@ class UserAnswerListResponse(BaseModel):
     per_page: int
     total_pages: int
 
+
+#Code Execution Schemas
+class CodeExecutionRequest(BaseModel):
+    code: str
+    language: str
+    test_cases: List[Dict[str, Any]]
+    time_limit: Optional[int] = 5
+
+class TestCaseResult(BaseModel):
+    input: str
+    expected_output: str
+    actual_output: str
+    passed: bool
+    execution_time: int
+    memory_usage: int
+    error_message: Optional[str] = None
+
+class CodeExecutionResponse(BaseModel):
+    results: List[TestCaseResult]
 

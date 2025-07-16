@@ -1,7 +1,7 @@
 from db import Base
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, ForeignKey, Boolean, TIMESTAMP,
-    ARRAY, DECIMAL, func
+    ARRAY, DECIMAL, func, JSON
 )
 from sqlalchemy.orm import relationship
 
@@ -110,20 +110,20 @@ class UserAnswer(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     question_id = Column(Integer, ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
-    answer_text = Column(Text)  # For theory questions
-    source_code = Column(Text)  # For coding questions
-    language = Column(String(20))  # Programming language used
-    is_correct = Column(Boolean)  # Whether the answer is correct
-    score = Column(Integer, default=0)  # Points earned
-    time_taken_seconds = Column(Integer)  # Time spent on this answer
-    submitted_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
-    
-    # For coding questions - execution results
+    answer_content = Column(Text)  # Renamed from answer_text for consistency
+    answer_type = Column(String(20), default="coding")
+    code_language = Column(String(20))  # Programming language used
+    test_results = Column(JSON)  # Store test results as JSON
+    is_correct = Column(Boolean, default=False)
+    score = Column(Integer, default=0)
+    feedback = Column(Text)
     execution_time = Column(Integer)  # milliseconds
     memory_used = Column(Integer)  # KB
     test_cases_passed = Column(Integer, default=0)
     total_test_cases = Column(Integer, default=0)
     error_message = Column(Text)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User")
     question = relationship("Question", back_populates="user_answers")

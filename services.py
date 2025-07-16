@@ -279,12 +279,7 @@ def get_question_by_id(db: Session, question_id: int) -> Optional[Question]:
 
 def get_questions(
     db: Session, 
-    skip: int = 0, 
-    limit: int = 10,
-    category_id: Optional[int] = None,
-    difficulty: Optional[str] = None,
-    search: Optional[str] = None,
-    status: Optional[str] = None
+
 ) -> Tuple[List[Question], int]:
     """Get all questions without filtering and pagination"""
     
@@ -347,22 +342,35 @@ def delete_question(db: Session, question_id: int) -> bool:
 # User Answer Services - USING THE SCHEMAS PROPERLY
 def create_user_answer(db: Session, answer: UserAnswerCreate, user_id: int) -> UserAnswer:
     """Create a user answer"""
-    # Check if question exists
     question = get_question_by_id(db, answer.question_id)
     if not question:
         raise ValueError("Question not found")
     
-    # Create answer using schema
-    db_answer = UserAnswer(**answer.dict(), user_id=user_id)
-    
-    # Set test case info for coding questions
-    if question.question_type == "coding":
-        db_answer.total_test_cases = len(question.test_cases)
-        # TODO: Implement code execution logic
-        db_answer.test_cases_passed = 0
-        db_answer.is_correct = False
-        db_answer.score = 0
-    
+    #calculate score and correctness base on test results
+    is_correct = False
+    test_cases_passed = 0
+    total_test_cases = 0
+    score = 0
+
+    if answer.test_results:
+        total_test_cases = len(answer.test_results)
+        test_cases_passed = sum(1 for result in answer.test_results if result.get("passed", False))
+        is_correct = test_cases_passed == total_test_cases
+        score = int((test_cases_passed / total_test_cases) * 100) if total_test_cases > 0 else 0
+
+    db_answer = UserAnswer(
+        user_id=user_id,
+        question_id=answer.question_id,
+        answer_content=answer.answer_content,
+        answer_type=answer.answer_type,
+        code_language=answer.code_language,
+        test_results=answer.test_results,
+        is_correct=is_correct,
+        score=score,
+        test_cases_passed=test_cases_passed,
+        total_test_cases=total_test_cases
+    )
+
     db.add(db_answer)
     db.commit()
     db.refresh(db_answer)
@@ -371,11 +379,9 @@ def create_user_answer(db: Session, answer: UserAnswerCreate, user_id: int) -> U
 def get_user_answers(
     db: Session,
     user_id: Optional[int] = None,
-    question_id: Optional[int] = None,
-    skip: int = 0,
-    limit: int = 100
+    question_id: Optional[int] = None
 ) -> Tuple[List[UserAnswer], int]:
-    """Get user answers with filtering"""
+    """Get user answers with filtering (no pagination)"""
     query = db.query(UserAnswer)
     
     filters = []
@@ -387,10 +393,11 @@ def get_user_answers(
     if filters:
         query = query.filter(and_(*filters))
     
-    query = query.order_by(desc(UserAnswer.submitted_at))
+    # Fix: Change submitted_at to created_at
+    query = query.order_by(desc(UserAnswer.created_at))
     
-    total = query.count()
-    answers = query.offset(skip).limit(limit).all()
+    answers = query.all()
+    total = len(answers)
     
     return answers, total
 
@@ -405,12 +412,34 @@ def update_user_answer(db: Session, answer_id: int, answer_update: UserAnswerUpd
         return None
     
     update_data = answer_update.dict(exclude_unset=True)
-    for field, value in update_data.items():
+
+    if "question_id" in update_data and update_data["question_id"] is None:
+        update_data.pop("question_id")
+
+    if "test_results" in update_data:
+        test_results = update_data["test_results"]
+        
+        if test_results:
+            total_test_cases = len(test_results)
+            test_cases_passed = sum(1 for result in test_results if result.get("passed", False))
+            is_correct = test_cases_passed == total_test_cases
+            score = int((test_cases_passed / total_test_cases) * 100) if total_test_cases > 0 else 0
+            
+            update_data.update({
+                "is_correct": is_correct,
+                "score": score,
+                "test_cases_passed": test_cases_passed,
+                "total_test_cases": total_test_cases
+            })
+
+    for field,value in update_data.items():
         setattr(db_answer, field, value)
-    
+
     db.commit()
     db.refresh(db_answer)
     return db_answer
+
+
 
 # Tag Services - SIMPLE AND CLEAN
 def get_tags(db: Session) -> List[Tag]:
