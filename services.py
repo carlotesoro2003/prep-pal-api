@@ -1,10 +1,11 @@
-from models import User, PasswordResetToken, Question, QuestionCategory, TestCase, UserAnswer, Tag, QuestionTag
+from models import User, PasswordResetToken, Question, QuestionCategory, TestCase, UserAnswer, Tag, QuestionTag, InterviewSession, SessionQuestion
 from sqlalchemy import or_, and_, func, desc
 from sqlalchemy.orm import Session, joinedload, selectinload
 from schemas import (
-    UserCreate, PasswordResetRequest, PasswordRestConfirm, 
+    UserCreate,
     QuestionCreate, QuestionUpdate, QuestionCategoryCreate, QuestionCategoryUpdate,
-    TestCaseCreate, TestCaseUpdate, UserAnswerCreate, UserAnswerUpdate, TagCreate
+    TestCaseCreate, TestCaseUpdate, UserAnswerCreate, UserAnswerUpdate, TagCreate, InterviewSessionCreate, 
+    InterviewSessionUpdate, SessionQuestionCreate
 )
 from auth import get_password_hash
 import secrets
@@ -460,3 +461,69 @@ def get_or_create_tag(db: Session, tag_name: str) -> Tag:
     if not db_tag:
         db_tag = create_tag(db, TagCreate(name=tag_name))
     return db_tag
+
+
+
+#INTERVIEW SESSIONS SERVICES 
+def create_interview_session(db: Session, session_data: InterviewSessionCreate, user_id: int):
+    session = InterviewSession(
+        user_id=user_id,
+        title=session_data.title,
+        type=session_data.type,
+        difficulty=session_data.difficulty,
+        scheduled_at=session_data.scheduled_at,
+        end_at=session_data.end_at,
+        feedback=session_data.feedback,
+        rating=session_data.rating,
+        recording_url=session_data.recording_url
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+def get_interview_sessions(db: Session, user_id: int):
+    sessions = db.query(InterviewSession).filter(InterviewSession.user_id == user_id).order_by(InterviewSession.scheduled_at.desc()).all()
+    return sessions, len(sessions)
+
+def get_interview_session_by_id(db: Session, session_id: int):
+    return db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+
+
+def update_interview_session(db: Session, session_id: int, session_update: InterviewSessionUpdate):
+    session = get_interview_session_by_id(db, session_id)
+    if not session:
+        return None
+    update_data = session_update.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(session, field, value)
+    db.commit()
+    db.refresh(session)
+    return session
+
+def delete_interview_session(db: Session, session_id: int):
+    session = get_interview_session_by_id(db, session_id)
+    if not session:
+        return False
+    db.delete(session)
+    db.commit()
+    return True
+
+
+#SESSION QUESTIONS SERVICES
+def add_session_question(db: Session, session_id: int, sq_data: SessionQuestionCreate):
+    sq = SessionQuestion(
+        session_id=session_id,  
+        order_index=sq_data.order_index,
+        question_title=sq_data.question_title,
+        question_description=sq_data.question_description,
+        question_type=sq_data.question_type,
+        difficulty=sq_data.difficulty,
+        user_answer=sq_data.user_answer,
+        feedback=sq_data.feedback,
+        time_spent_seconds=sq_data.time_spent_seconds
+    )
+    db.add(sq)
+    db.commit()
+    db.refresh(sq)
+    return sq

@@ -299,3 +299,67 @@ class TestCaseResult(BaseModel):
 class CodeExecutionResponse(BaseModel):
     results: List[TestCaseResult]
 
+
+
+#INTERVIEW SESSION SCHEMAS 
+class InterviewSessionBase(BaseModel):
+    title: str
+    type: Optional[str] = None
+    difficulty: Optional[Difficulty] = None
+    scheduled_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None  # <-- NEW FIELD
+    feedback: Optional[str] = None
+    rating: Optional[int] = None
+    recording_url: Optional[str] = None
+
+class InterviewSessionCreate(InterviewSessionBase):
+    pass
+
+class InterviewSessionUpdate(BaseModel):
+    title: Optional[str] = None
+    type: Optional[str] = None
+    difficulty: Optional[Difficulty] = None
+    scheduled_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None  # <-- NEW FIELD
+    feedback: Optional[str] = None
+    rating: Optional[int] = None
+    recording_url: Optional[str] = None
+
+class InterviewSessionResponse(InterviewSessionBase):
+    id: int
+    user_id: int
+    scheduled_at: Optional[datetime]
+    end_at: Optional[datetime]  # <-- NEW FIELD
+    completed_at: Optional[datetime]
+    created_at: Optional[datetime]
+    feedback: Optional[str]
+    rating: Optional[int]
+    recording_url: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+class InterviewSessionListResponse(BaseModel):
+    sessions: List[InterviewSessionResponse]
+    total: int
+
+
+#SESSION QUESTION SCHEMAS
+class SessionQuestionBase(BaseModel):
+    order_index: int
+    question_title: str
+    question_description: Optional[str] = None
+    question_type: Optional[str] = None
+    difficulty: Optional[str] = None
+    user_answer: Optional[str] = None
+    feedback: Optional[str] = None
+    time_spent_seconds: Optional[int] = None
+
+class SessionQuestionCreate(SessionQuestionBase):
+    pass
+
+class SessionQuestionResponse(SessionQuestionBase):
+    session_id: int
+
+    class Config:
+        from_attributes = True

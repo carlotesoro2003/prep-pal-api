@@ -7,13 +7,15 @@ from db import get_db, engine
 from sqlalchemy.orm import Session
 from auth import authenticate_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
 from email_service import send_password_reset_email
-from typing import Optional
+from typing import Optional, List
 import math
 import subprocess
 import tempfile
-import os
+import os   
 import time
 import signal
+from schemas import InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, InterviewSessionListResponse, SessionQuestionCreate, SessionQuestionResponse
+from models import InterviewSession, SessionQuestion
 
 app = FastAPI()
 
@@ -743,3 +745,72 @@ try {{
             "memory_usage": 0,
             "error_message": str(e)
         }
+    
+
+#INTERVIEW SESSION CRUD ENDPOINTS
+@app.post("/interview-sessions", response_model=InterviewSessionResponse)
+def create_interview_session(
+    session_data: InterviewSessionCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    session = services.create_interview_session(db, session_data, current_user.id)
+    return session
+
+@app.get("/interview-sessions", response_model=InterviewSessionListResponse)
+def get_interview_sessions(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    sessions, total = services.get_interview_sessions(db, current_user.id)
+    return {"sessions": sessions, "total": total}
+
+@app.get("/interview-sessions/{session_id}", response_model=InterviewSessionResponse)
+def get_interview_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    session = services.get_interview_session_by_id(db, session_id)
+    if not session or session.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+@app.put("/interview-sessions/{session_id}", response_model=InterviewSessionResponse)
+def update_interview_session(
+    session_id: int,
+    session_update: InterviewSessionUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    session = services.get_interview_session_by_id(db, session_id)
+    if not session or session.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Session not found")
+    updated = services.update_interview_session(db, session_id, session_update)
+    return updated
+
+@app.delete("/interview-sessions/{session_id}")
+def delete_interview_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    session = services.get_interview_session_by_id(db, session_id)
+    if not session or session.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Session not found")
+    success = services.delete_interview_session(db, session_id)
+    return {"success": success}
+
+# SESSION QUESTION CRUD ENDPOINTS
+@app.post("/interview-sessions/{session_id}/questions", response_model=SessionQuestionResponse)
+def add_session_question(
+    session_id: int,
+    sq_data: schemas.SessionQuestionCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    session = services.get_interview_session_by_id(db, session_id)
+    if not session or session.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Session not found")
+    sq = services.add_session_question(db, session_id, sq_data)
+    return sq

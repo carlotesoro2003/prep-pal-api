@@ -181,19 +181,23 @@ class InterviewSession(Base):
     type = Column(String(20))
     difficulty = Column(String(10))
     scheduled_at = Column(TIMESTAMP(timezone=True))
+    end_at = Column(TIMESTAMP(timezone=True))  # NEW: End time of the session
     completed_at = Column(TIMESTAMP(timezone=True))
-    duration_minutes = Column(Integer)
     feedback = Column(Text)
     rating = Column(Integer)
     recording_url = Column(String(255))
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
 # Questions in Sessions
 class SessionQuestion(Base):
     __tablename__ = "session_questions"
 
     session_id = Column(Integer, ForeignKey("interview_sessions.id", ondelete="CASCADE"), primary_key=True)
-    question_id = Column(Integer, ForeignKey("questions.id", ondelete="CASCADE"), primary_key=True)
     order_index = Column(Integer, nullable=False)
+    question_title = Column(String(255), nullable=False)
+    question_description = Column(Text)
+    question_type = Column(String(20))
+    difficulty = Column(String(10))
     user_answer = Column(Text)
     feedback = Column(Text)
     time_spent_seconds = Column(Integer)
