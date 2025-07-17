@@ -5,7 +5,7 @@ from datetime import timedelta
 import services, models, schemas
 from db import get_db, engine
 from sqlalchemy.orm import Session
-from auth import authenticate_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
+from auth import authenticate_user, create_access_token, create_refresh_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
 from email_service import send_password_reset_email
 from typing import Optional, List
 import math
@@ -14,9 +14,12 @@ import tempfile
 import os   
 import time
 import signal
-from schemas import InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, InterviewSessionListResponse, SessionQuestionCreate, SessionQuestionResponse
-from models import InterviewSession, SessionQuestion
+from schemas import InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, InterviewSessionListResponse, SessionQuestionResponse
+from jose import JWTError, jwt
+from auth import SECRET_KEY, ALGORITHM
 
+
+# Initialize FastAPI app
 app = FastAPI()
 
 # CORS middleware - IMPORTANT: This must be configured correctly
@@ -65,15 +68,29 @@ def login_for_access_token(
         data={"id": user.id, "email": user.email, "full_name": user.full_name},
         expires_delta=access_token_expires,
     )
+    refresh_token = create_refresh_token(
+        data={"id": user.id, "email": user.email, "full_name": user.full_name}
+    )
     
     # Set httpOnly cookie
     response.set_cookie(
         key="access_token",
         value=access_token,
-        httponly=False,  # Set to False so JavaScript can read it
+        httponly=True,  # Set to False so JavaScript can read it
         secure=False,
         samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/"
+    )
+
+    #Set httpOnly cookie for refresh token
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=7 * 24 * 60 * 60,
         path="/"
     )
     
@@ -87,6 +104,34 @@ def login_for_access_token(
     }
     print(f"Returning response: {response_data}")
     return response_data
+
+
+#Refresh token endpoint
+@app.post("/refresh-token")
+def refresh_access_token(
+    response: Response,
+    refresh_token: str = Body(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+        
+        user_id = payload.get("id")
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        access_token = create_access_token(
+            data={"id": user.id, "email": user.email, "full_name": user.full_name}
+        )
+        
+        return {"access_token": access_token, "token_type": "bearer"}
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 # Current user endpoint
 @app.get("/users/me", response_model=schemas.UserResponse)
