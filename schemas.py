@@ -363,3 +363,8 @@ class SessionQuestionResponse(SessionQuestionBase):
 
     class Config:
         from_attributes = True
+
+
+
+class RecordingUrlRequest(BaseModel):
+    recording_url: str
