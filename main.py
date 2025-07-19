@@ -14,10 +14,14 @@ import tempfile
 import os   
 import time
 import signal
-from schemas import InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, InterviewSessionListResponse, SessionQuestionResponse, RecordingUrlRequest
+from schemas import InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, InterviewSessionListResponse, SessionQuestionResponse, RecordingUrlRequest, AIChatInterviewStartRequest, AIChatInterviewStartResponse, AIChatMessageRequest, AIChatMessageResponse
 from jose import JWTError, jwt
 from auth import SECRET_KEY, ALGORITHM
 from gemini_ai import generate_interview_questions, ai_employer_feedback
+from routes import websocket_routes, notification_routes
+from notif_service import notification_service
+import asyncio
+from contextlib import asynccontextmanager
 
 
 # Initialize FastAPI app
@@ -31,6 +35,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(websocket_routes.router)
+app.include_router(notification_routes.router)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event to start notification scheduler"""
+    # Start the notification service scheduler
+    await notification_service.start_notification_scheduler()
+    yield
+    # Stop the notification service scheduler
+    notification_service.stop_notification_scheduler()
+    
 
 # Root endpoint
 @app.get("/")
@@ -908,3 +925,33 @@ def ai_feedback(
 ):
     feedback = ai_employer_feedback(question, answer)
     return {"feedback": feedback}
+
+
+@app.post("/ai-chat-interview/start", response_model=AIChatInterviewStartResponse)
+def ai_chat_interview_start(
+    req: AIChatInterviewStartRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    questions = generate_interview_questions(req.role, intro=req.intro)
+    if not questions or not isinstance(questions, list):
+        raise HTTPException(status_code=500, detail="AI did not return questions.")
+    first_q = questions[0]
+    # Format the first question for the chat
+    ai_message = (
+        f"Thank you for sharing! Let's start your mock interview for the {req.role} position.\n"
+        f"Here is your first question:\n\n"
+        f"{first_q.get('title', '')}\n{first_q.get('description', '')}"
+    )
+    return {"ai_message": ai_message, "questions": questions}
+
+@app.post("/ai-chat-interview/message", response_model=AIChatMessageResponse)
+def ai_chat_interview_message(
+    req: AIChatMessageRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # Get AI feedback for the user's answer
+    feedback = ai_employer_feedback(req.question, req.answer)
+    ai_message = "Thank you for your answer! Here is my feedback and the next question (if any)."
+    return {"ai_message": ai_message, "feedback": feedback}

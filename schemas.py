@@ -364,7 +364,42 @@ class SessionQuestionResponse(SessionQuestionBase):
     class Config:
         from_attributes = True
 
-
-
 class RecordingUrlRequest(BaseModel):
     recording_url: str
+
+
+#AI CHAT INTEREVIEW START REQUEST 
+
+class AIChatInterviewStartRequest(BaseModel):
+    intro: str
+    role: str
+
+class AIChatInterviewStartResponse(BaseModel):
+    ai_message: str
+    questions: list[Dict]
+
+class AIChatMessageRequest(BaseModel):
+    question: str
+    answer: str
+
+class AIChatMessageResponse(BaseModel):
+    ai_message: str
+    feedback: Optional[str] = None
+
+
+class NotificationResponse(BaseModel):
+    id: int
+    title: str
+    message: str
+    type: str
+    action_url: str = None
+    is_read: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class SendNotificationRequest(BaseModel):
+    title: str
+    message: str
+    action_url: str = None

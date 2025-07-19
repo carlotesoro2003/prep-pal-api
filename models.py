@@ -20,6 +20,8 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_login = Column(DateTime(timezone=True))
 
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+
 #Password Reset Token 
 class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
@@ -187,6 +189,7 @@ class InterviewSession(Base):
     rating = Column(Integer)
     recording_url = Column(String(255))
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    notfication_sent = Column(Boolean, default=False)
 
 # Questions in Sessions
 class SessionQuestion(Base):
@@ -271,12 +274,16 @@ class UserGoal(Base):
 # Notifications
 class Notification(Base):
     __tablename__ = "notifications"
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
-    type = Column(String(50), nullable=False)
+    type = Column(String(50), default="general")
+    action_url = Column(String(500), nullable=True)
     is_read = Column(Boolean, default=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
-    action_url = Column(String(255))
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    
+    user = relationship("User", back_populates="notifications")

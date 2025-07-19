@@ -15,10 +15,11 @@ def extract_json_from_markdown(text):
 
 
 # Generate interview questions for a specific role
-def generate_interview_questions(role: str, difficulty: str = "medium", num_questions: int = 5):
+def generate_interview_questions(role: str, difficulty: str = "medium", num_questions: int = 5, intro=None):
     prompt = (
         f"Generate {num_questions} realistic interview questions for a {role} position. "
         f"Difficulty: {difficulty}. Return as a JSON list of objects with 'title', 'description', 'type', and 'difficulty'."
+        f"Do NOT explain the purpose of the question. Only provide the question itself."
     )
     model = genai.GenerativeModel("gemini-2.0-flash")
     response = model.generate_content(prompt)
@@ -31,15 +32,37 @@ def generate_interview_questions(role: str, difficulty: str = "medium", num_ques
     try:
         return json.loads(json_str)
     except Exception as e:
-        raise Exception(f"Gemini API did not return valid JSON. Extracted: {json_str}") from e
+        raise Exception(f"Gemini API did not return valid JSON. Extracted: {json_str}") from e 
 
 
 # Generate AI feedback for a candidate's answer to an interview question
 def ai_employer_feedback(question: str, answer: str):
     prompt = (
-        f"You are an employer. Here is the interview question: '{question}'. "
-        f"Here is the candidate's answer: '{answer}'. Give detailed feedback and a follow-up question."
+        f"You are an AI interviewer conducting a professional interview. "
+        f"Question asked: '{question}'\n"
+        f"Candidate's answer: '{answer}'\n\n"
+        f"Provide a conversational response that:\n"
+        f"1. Acknowledges their answer naturally\n"
+        f"2. Gives constructive feedback\n"
+        f"3. Asks a thoughtful follow-up question\n"
+        f"4. Speaks in a friendly, professional tone like Siri or Alexa\n"
+        f"Keep it concise and conversational for text-to-speech."
+        f"Limit your feedback to 2-3 sentences."
     )
     model = genai.GenerativeModel("gemini-2.0-flash")
     response = model.generate_content(prompt)
-    return response.text    
+    return response.text
+
+def generate_conversational_question(role: str, intro: str = None):
+    """Generate a more conversational first question"""
+    prompt = (
+        f"You are conducting an interview for a {role} position. "
+        f"The candidate introduced themselves as: '{intro}'\n"
+        f"Start the interview with a warm, conversational opening and then ask "
+        f"an appropriate first question. Keep it natural for text-to-speech delivery. "
+        f"Speak like a professional interviewer would."
+        f"Do NOT explain the purpose of the question. Only provide the question itself."
+    )
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    response = model.generate_content(prompt)
+    return response.text
