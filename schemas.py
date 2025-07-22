@@ -381,10 +381,13 @@ class AIChatInterviewStartResponse(BaseModel):
 class AIChatMessageRequest(BaseModel):
     question: str
     answer: str
+    follow_up_count: int = 0
 
 class AIChatMessageResponse(BaseModel):
     ai_message: str
     feedback: Optional[str] = None
+    followUpQuestion: Optional[str] = None
+    
 
 
 class NotificationResponse(BaseModel):

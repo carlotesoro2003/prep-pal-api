@@ -951,7 +951,13 @@ def ai_chat_interview_message(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Get AI feedback for the user's answer
-    feedback = ai_employer_feedback(req.question, req.answer)
+    # Use follow_up_count from the request, default to 0 if not present
+    follow_up_count = getattr(req, "follow_up_count", 0)
+    feedback, follow_up, new_follow_up_count = ai_employer_feedback(req.question, req.answer, follow_up_count)
     ai_message = "Thank you for your answer! Here is my feedback and the next question (if any)."
-    return {"ai_message": ai_message, "feedback": feedback}
+    return {
+        "ai_message": ai_message,
+        "feedback": feedback,
+        "followUpQuestion": follow_up,
+        "follow_up_count": new_follow_up_count
+    }
