@@ -27,23 +27,14 @@ class ConnectionManager:
             except ValueError:
                 pass  # Connection already removed
         logger.info(f"User {user_id} disconnected from WebSocket")
-
+    
     async def send_personal_message(self, message: dict, user_id: int):
-        if user_id in self.active_connections:
-            disconnected_connections = []
-            for connection in self.active_connections[user_id]:
-                try:
-                    await connection.send_text(json.dumps(message))
-                except Exception as e:
-                    logger.error(f"Error sending message to user {user_id}: {e}")
-                    disconnected_connections.append(connection)
-            
-            # Remove disconnected connections
-            for conn in disconnected_connections:
-                try:
-                    self.active_connections[user_id].remove(conn)
-                except ValueError:
-                    pass
+        websockets = self.active_connections.get(user_id, [])
+        for ws in websockets:
+            try:
+                await ws.send_json(message)
+            except Exception as e:
+                logger.error(f"Error sending message to user {user_id}: {e}")
 
     async def send_notification(self, user_id: int, title: str, message: str, action_url: str = None):
         notification = {

@@ -5,11 +5,12 @@ from enum import Enum
 
 # Schemas for User 
 class UserBase(BaseModel):
-    last_name: str
-    first_name: str
-    email: str
-    full_name: str
+    last_name: str = None
+    first_name: str = None
+    email: str = None
+    full_name: str = None
     avatar_url: Optional[str] = None 
+    bio: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str
@@ -25,6 +26,12 @@ class UserCreate(UserBase):
         if not any(c.isalpha() for c in value):
             raise ValueError("Password must contain at least one letter")
         return value 
+    
+class UserUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
 
 class UserResponse(UserBase):
     id: int
@@ -307,7 +314,7 @@ class InterviewSessionBase(BaseModel):
     type: Optional[str] = None
     difficulty: Optional[Difficulty] = None
     scheduled_at: Optional[datetime] = None
-    end_at: Optional[datetime] = None  # <-- NEW FIELD
+    end_at: Optional[datetime] = None  
     feedback: Optional[str] = None
     rating: Optional[int] = None
     recording_url: Optional[str] = None
@@ -320,7 +327,7 @@ class InterviewSessionUpdate(BaseModel):
     type: Optional[str] = None
     difficulty: Optional[Difficulty] = None
     scheduled_at: Optional[datetime] = None
-    end_at: Optional[datetime] = None  # <-- NEW FIELD
+    end_at: Optional[datetime] = None  
     feedback: Optional[str] = None
     rating: Optional[int] = None
     recording_url: Optional[str] = None
@@ -329,7 +336,7 @@ class InterviewSessionResponse(InterviewSessionBase):
     id: int
     user_id: int
     scheduled_at: Optional[datetime]
-    end_at: Optional[datetime]  # <-- NEW FIELD
+    end_at: Optional[datetime]  
     completed_at: Optional[datetime]
     created_at: Optional[datetime]
     feedback: Optional[str]

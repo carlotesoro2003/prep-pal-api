@@ -14,7 +14,7 @@ import tempfile
 import os   
 import time
 import signal
-from schemas import InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, InterviewSessionListResponse, SessionQuestionResponse, RecordingUrlRequest, AIChatInterviewStartRequest, AIChatInterviewStartResponse, AIChatMessageRequest, AIChatMessageResponse
+from schemas import InterviewSessionCreate, InterviewSessionUpdate, InterviewSessionResponse, InterviewSessionListResponse, SessionQuestionResponse, RecordingUrlRequest, AIChatInterviewStartRequest, AIChatInterviewStartResponse, AIChatMessageRequest, AIChatMessageResponse, UserUpdate
 from jose import JWTError, jwt
 from auth import SECRET_KEY, ALGORITHM
 from gemini_ai import generate_interview_questions, ai_employer_feedback
@@ -22,13 +22,30 @@ from routes import websocket_routes, notification_routes
 from notif_service import notification_service
 import asyncio
 from contextlib import asynccontextmanager
+import logging
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logging.basicConfig(level=logging.INFO)
+    print("Starting notification service...")
+    # Start the scheduler as a background task
+    notification_task = asyncio.create_task(notification_service.start_notification_scheduler())
+    try:
+        yield
+    except Exception as e:
+        print(f"Lifespan startup error: {e}")
+    finally:
+        print("Stopping notification service...")
+        notification_service.stop_notification_scheduler()
+        # Optionally, wait for the task to finish
+        await notification_task
 
 # Initialize FastAPI app
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # CORS middleware - IMPORTANT: This must be configured correctly
-app.add_middleware(
+app.add_middleware(    
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  
     allow_credentials=True,  
@@ -36,18 +53,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(websocket_routes.router)
+app.include_router(websocket_routes.router, prefix="/api")
 app.include_router(notification_routes.router)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifespan event to start notification scheduler"""
-    # Start the notification service scheduler
-    await notification_service.start_notification_scheduler()
-    yield
-    # Stop the notification service scheduler
-    notification_service.stop_notification_scheduler()
-    
 
 # Root endpoint
 @app.get("/")
@@ -155,6 +163,17 @@ def refresh_access_token(
 @app.get("/users/me", response_model=schemas.UserResponse)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
+
+
+@app.put("/users/me", response_model=schemas.UserResponse)
+def update_profile(user_update: UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    updated = services.update_user(db, current_user.id, user_update)
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return updated
 
 
 # Logout endpoint

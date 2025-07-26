@@ -15,6 +15,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=False)
+    bio = Column(Text, nullable=True)
     avatar_url = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -189,7 +190,9 @@ class InterviewSession(Base):
     rating = Column(Integer)
     recording_url = Column(String(255))
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
-    notfication_sent = Column(Boolean, default=False)
+    notification_sent = Column(Boolean, default=False)
+    notification_5min_sent = Column(Boolean, default=False)  
+    ongoing_notification_sent = Column(Boolean, default=False)  
 
 # Questions in Sessions
 class SessionQuestion(Base):

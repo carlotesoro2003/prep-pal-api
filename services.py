@@ -2,7 +2,7 @@ from models import User, PasswordResetToken, Question, QuestionCategory, TestCas
 from sqlalchemy import or_, and_, func, desc
 from sqlalchemy.orm import Session, joinedload, selectinload
 from schemas import (
-    UserCreate,
+    UserCreate, UserUpdate,
     QuestionCreate, QuestionUpdate, QuestionCategoryCreate, QuestionCategoryUpdate,
     TestCaseCreate, TestCaseUpdate, UserAnswerCreate, UserAnswerUpdate, TagCreate, InterviewSessionCreate, 
     InterviewSessionUpdate, SessionQuestionCreate
@@ -27,13 +27,29 @@ def create_user(db: Session, user: UserCreate):
         password_hash=hashed_password,
         last_name=user.last_name,
         first_name=user.first_name,
-        full_name=user.full_name,  # Use the provided full_name from schema
+        full_name=user.full_name,  
         avatar_url=user.avatar_url,
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     return db_user
+
+#update user inifo
+def update_user(db: Session, user_id: int, user_update: UserUpdate):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return None
+    update_data = user_update.dict(exclude_unset=True)
+    first_name = update_data.get("first_name", user.first_name)
+    last_name = update_data.get("last_name", user.last_name)
+    bio = update_data.get("bio", user.bio)
+    update_data["full_name"] = f"{first_name} {last_name}".strip()
+    for field, value in update_data.items():
+        setattr(user, field, value)
+    db.commit()
+    db.refresh(user)
+    return user
 
 # Password Reset Services Functions
 def create_password_reset_token(db: Session, user_id: int) -> str:
