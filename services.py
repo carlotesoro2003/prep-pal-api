@@ -222,7 +222,9 @@ def create_question(
         memory_limit=question_data.memory_limit,
         status=question_data.status,
         is_public=question_data.is_public,
-        created_by=created_by
+        created_by=created_by,
+        function_name=question_data.function_name,
+        parameters=[p.dict() for p in question_data.parameters] if question_data.parameters else None,
     )
     
     db.add(question)
@@ -337,11 +339,14 @@ def update_question(db: Session, question_id: int, question_update: QuestionUpda
     db_question = get_question_by_id(db, question_id)
     if not db_question:
         return None
-    
+
     update_data = question_update.dict(exclude_unset=True)
+    # Ensure parameters is a list of dicts if present
+    if "parameters" in update_data and update_data["parameters"]:
+        update_data["parameters"] = [p.dict() if hasattr(p, "dict") else p for p in update_data["parameters"]]
     for field, value in update_data.items():
         setattr(db_question, field, value)
-    
+
     db.commit()
     db.refresh(db_question)
     return db_question

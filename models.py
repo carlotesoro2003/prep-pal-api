@@ -77,6 +77,8 @@ class Question(Base):
     test_cases = relationship("TestCase", back_populates="question", cascade="all, delete-orphan")
     user_answers = relationship("UserAnswer", back_populates="question")
     creator = relationship("User", foreign_keys=[created_by])
+    function_name = Column(String(100), nullable=True)
+    parameters = Column(JSON, nullable=True)  
     
     # NEW: Question type and coding-related fields
     question_type = Column(String(20), default="theory")  # "theory", "coding", "multiple_choice"

@@ -25,24 +25,24 @@ from contextlib import asynccontextmanager
 import logging
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logging.basicConfig(level=logging.INFO)
-    print("Starting notification service...")
-    # Start the scheduler as a background task
-    notification_task = asyncio.create_task(notification_service.start_notification_scheduler())
-    try:
-        yield
-    except Exception as e:
-        print(f"Lifespan startup error: {e}")
-    finally:
-        print("Stopping notification service...")
-        notification_service.stop_notification_scheduler()
-        # Optionally, wait for the task to finish
-        await notification_task
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     logging.basicConfig(level=logging.INFO)
+#     print("Starting notification service...")
+#     # Start the scheduler as a background task
+#     notification_task = asyncio.create_task(notification_service.start_notification_scheduler())
+#     try:
+#         yield
+#     except Exception as e:
+#         print(f"Lifespan startup error: {e}")
+#     finally:
+#         print("Stopping notification service...")
+#         notification_service.stop_notification_scheduler()
+#         # Optionally, wait for the task to finish
+#         await notification_task
 
 # Initialize FastAPI app
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 # CORS middleware - IMPORTANT: This must be configured correctly
 app.add_middleware(    
@@ -598,6 +598,7 @@ def get_my_answers(
     }
 
 
+
 @app.post("/code/run", response_model=schemas.CodeExecutionResponse)
 async def run_code(
     request: schemas.CodeExecutionRequest = Body(...),
@@ -606,35 +607,42 @@ async def run_code(
 ):
     """Execute code against test cases"""
     try:
+        logging.info(f"Received /code/run request: language={request.language}, function_name={getattr(request, 'function_name', None)}")
         results = []
         # Use the provided time_limit or default to 5 seconds
         time_limit = getattr(request, "time_limit", 5)
-        for test_case in request.test_cases:
+        for idx, test_case in enumerate(request.test_cases):
+            logging.info(f"Test case {idx+1}: input={test_case.get('input_data', '')}, expected_output={test_case.get('expected_output', '')}")
+            if not getattr(request, "function_name", None):
+                logging.error("function_name is missing in request")
+                raise HTTPException(status_code=400, detail="function_name is required")
             result = await execute_code_safely(
                 code=request.code,
                 language=request.language,
                 input_data=test_case.get("input_data", ""),
                 expected_output=test_case.get("expected_output", ""),
+                function_name=request.function_name,
                 timeout=time_limit  # Use the time limit per question
             )
+            logging.info(f"Test case {idx+1} result: {result}")
             results.append(result)
 
+        logging.info(f"Returning results for code run: {results}")
         return {"results": results}
     except Exception as e:
+        logging.exception("Exception during code run")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
     
-async def execute_code_safely(code: str, language: str, input_data: str, expected_output: str, timeout: int = 5):
+async def execute_code_safely(code: str, language: str, input_data: str, function_name: str, expected_output: str, timeout: int = 5):
     """Execute code with proper error handling and security"""
     start_time = time.time()
-    
+    logging.info(f"Executing code safely: language={language}, function_name={function_name}, input_data={input_data}")
     try:
         if language == "python":
-            # Create temporary file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-                # Add input processing to the code
                 modified_code = f"""
 import sys
 import json
@@ -646,39 +654,38 @@ import json
 try:
     input_data = '''{input_data}'''
     if input_data.strip():
-        # Try to parse as JSON first, then as string
+        import json
         try:
             parsed_input = json.loads(input_data)
         except:
-            parsed_input = input_data.strip()
-        
-        # If there's a main function, call it
-        if 'def main(' in '''{code}''':
-            result = main(parsed_input)
-            print(json.dumps(result) if not isinstance(result, str) else result)
+            parsed_input = [x.strip() for x in input_data.split(',')]
+
+        def try_num(x):
+            try:
+                return int(x)
+            except:
+                try:
+                    return float(x)
+                except:
+                    return x
+
+        if isinstance(parsed_input, list):
+            parsed_input = [try_num(x) for x in parsed_input]
         else:
-            # Look for a function that matches common naming patterns
-            import re
-            function_match = re.search(r'def\\s+(\\w+)\\s*\\([^)]*\\):', '''{code}''')
-            if function_match:
-                function_name = function_match.group(1)
-                if function_name != 'main':
-                    result = eval(f'{{function_name}}(parsed_input)')
-                    print(json.dumps(result) if not isinstance(result, str) else result)
-            else:
-                # Execute the code and capture any print statements
-                exec(compile('''{code}''', '<string>', 'exec'))
+            parsed_input = [try_num(parsed_input)]
+
+        result = {function_name}(*parsed_input)
+        print(json.dumps(result) if not isinstance(result, str) else result)
     else:
-        # Just execute the code
         exec(compile('''{code}''', '<string>', 'exec'))
 except Exception as e:
     print(f"Error: {{e}}")
     sys.exit(1)
 """
+                logging.info(f"Generated Python code for execution:\n{modified_code}")
                 f.write(modified_code)
                 temp_file = f.name
-            
-            # Execute with timeout and resource limits
+
             process = subprocess.Popen(
                 ["python", temp_file],
                 stdout=subprocess.PIPE,
@@ -686,23 +693,22 @@ except Exception as e:
                 text=True,
                 preexec_fn=os.setsid if os.name != 'nt' else None
             )
-            
+
             try:
                 stdout, stderr = process.communicate(timeout=timeout)
                 actual_output = stdout.strip()
                 error_message = stderr.strip() if stderr else None
-                
-                # Clean up
+                logging.info(f"Python execution output: {actual_output}")
+                logging.info(f"Python execution error: {error_message}")
                 os.unlink(temp_file)
-                
             except subprocess.TimeoutExpired:
+                logging.error("Python code execution timed out")
                 if os.name != 'nt':
                     os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 else:
                     process.terminate()
                 process.wait()
                 os.unlink(temp_file)
-                
                 return {
                     "input": input_data,
                     "expected_output": expected_output,
@@ -712,9 +718,7 @@ except Exception as e:
                     "memory_usage": 0,
                     "error_message": "Time limit exceeded"
                 }
-                
         elif language == "javascript":
-            # For Node.js execution
             with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
                 modified_code = f"""
 const input_data = `{input_data}`;
@@ -753,9 +757,10 @@ try {{
     process.exit(1);
 }}
 """
+                logging.info(f"Generated JS code for execution:\n{modified_code}")
                 f.write(modified_code)
                 temp_file = f.name
-            
+
             process = subprocess.Popen(
                 ["node", temp_file],
                 stdout=subprocess.PIPE,
@@ -763,22 +768,22 @@ try {{
                 text=True,
                 preexec_fn=os.setsid if os.name != 'nt' else None
             )
-            
+
             try:
                 stdout, stderr = process.communicate(timeout=timeout)
                 actual_output = stdout.strip()
                 error_message = stderr.strip() if stderr else None
-                
+                logging.info(f"JS execution output: {actual_output}")
+                logging.info(f"JS execution error: {error_message}")
                 os.unlink(temp_file)
-                
             except subprocess.TimeoutExpired:
+                logging.error("JS code execution timed out")
                 if os.name != 'nt':
                     os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 else:
                     process.terminate()
                 process.wait()
                 os.unlink(temp_file)
-                
                 return {
                     "input": input_data,
                     "expected_output": expected_output,
@@ -788,8 +793,8 @@ try {{
                     "memory_usage": 0,
                     "error_message": "Time limit exceeded"
                 }
-                
         else:
+            logging.error(f"Language {language} not supported")
             return {
                 "input": input_data,
                 "expected_output": expected_output,
@@ -799,14 +804,16 @@ try {{
                 "memory_usage": 0,
                 "error_message": f"Language {language} not supported"
             }
-        
+
         execution_time = int((time.time() - start_time) * 1000)  # Convert to ms
-        
+
         # Compare outputs (normalize whitespace)
         actual_normalized = actual_output.strip()
         expected_normalized = expected_output.strip()
         passed = actual_normalized == expected_normalized
-        
+
+        logging.info(f"Test result: passed={passed}, actual_output={actual_output}, expected_output={expected_output}")
+
         return {
             "input": input_data,
             "expected_output": expected_output,
@@ -816,8 +823,9 @@ try {{
             "memory_usage": 0,  # Would need system monitoring for real memory usage
             "error_message": error_message
         }
-        
+
     except Exception as e:
+        logging.exception("Exception during safe code execution")
         return {
             "input": input_data,
             "expected_output": expected_output,
@@ -827,7 +835,6 @@ try {{
             "memory_usage": 0,
             "error_message": str(e)
         }
-    
 
 #INTERVIEW SESSION CRUD ENDPOINTS
 @app.post("/interview-sessions", response_model=InterviewSessionResponse)

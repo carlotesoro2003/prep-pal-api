@@ -190,6 +190,13 @@ class QuestionTagResponse(BaseModel):
         from_attributes = True
 
 # Question Schemas
+
+class QuestionParameter(BaseModel):
+    name: str
+    type: str
+    example: Optional[Any] = None
+
+
 class QuestionBase(BaseModel):
     title: str
     description: Optional[str] = None
@@ -202,6 +209,8 @@ class QuestionBase(BaseModel):
     memory_limit: int = 256
     status: QuestionStatus = QuestionStatus.draft
     is_public: bool = True
+    function_name: Optional[str] = None
+    parameters: Optional[List[QuestionParameter]] = None
 
 class QuestionCreate(QuestionBase):
     test_cases: Optional[List[TestCaseCreate]] = []
@@ -293,6 +302,7 @@ class CodeExecutionRequest(BaseModel):
     language: str
     test_cases: List[Dict[str, Any]]
     time_limit: Optional[int] = 5
+    function_name: str
 
 class TestCaseResult(BaseModel):
     input: str
