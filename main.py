@@ -696,10 +696,8 @@ try:
         # Decision logic for argument passing
         # If only one parameter and input is a list, pass as a single argument
         if len(sig.parameters) == 1 and isinstance(parsed_input, list):
-            print("DEBUG: Calling {function_name}(parsed_input)", file=sys.stderr)
             result = {function_name}(parsed_input)
         else:
-            print("DEBUG: Calling {function_name}(*parsed_input)", file=sys.stderr)
             result = {function_name}(*parsed_input)
         print(json.dumps(result) if not isinstance(result, str) else result)
     else:

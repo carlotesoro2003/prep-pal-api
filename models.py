@@ -75,7 +75,7 @@ class Question(Base):
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     category = relationship("QuestionCategory", back_populates="questions")
     test_cases = relationship("TestCase", back_populates="question", cascade="all, delete-orphan")
-    user_answers = relationship("UserAnswer", back_populates="question")
+    user_answers = relationship("UserAnswer", back_populates="question", cascade="all, delete-orphan")
     creator = relationship("User", foreign_keys=[created_by])
     function_name = Column(String(100), nullable=True)
     parameters = Column(JSON, nullable=True)  
