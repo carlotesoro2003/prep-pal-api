@@ -179,12 +179,22 @@ def update_profile(user_update: UserUpdate, db: Session = Depends(get_db), curre
 # Logout endpoint
 @app.post("/logout")
 def logout(response: Response):
+    # Log before attempting to delete cookie
+    # print("Logout endpoint called. Attempting to delete access_token cookie.")
     response.delete_cookie(
         key="access_token",
         httponly=True,
         samesite="lax",
         path="/"
     )
+    # Also delete refresh_token for completeness
+    response.delete_cookie(
+        key="refresh_token",
+        httponly=True,
+        samesite="lax",
+        path="/"
+    )
+    # print("Logout endpoint: access_token and refresh_token cookies deleted (if present).")
     return {"message": "Logged out successfully"}
 
 
@@ -646,6 +656,7 @@ async def execute_code_safely(code: str, language: str, input_data: str, functio
                 modified_code = f"""
 import sys
 import json
+import inspect
 
 # User's code
 {code}
@@ -674,12 +685,27 @@ try:
         else:
             parsed_input = [try_num(parsed_input)]
 
-        result = {function_name}(*parsed_input)
+        sig = inspect.signature({function_name})
+
+
+        # Log the type of the first parameter if only one
+        if len(sig.parameters) == 1:
+            param_name = list(sig.parameters.keys())[0]
+
+
+        # Decision logic for argument passing
+        # If only one parameter and input is a list, pass as a single argument
+        if len(sig.parameters) == 1 and isinstance(parsed_input, list):
+            print("DEBUG: Calling {function_name}(parsed_input)", file=sys.stderr)
+            result = {function_name}(parsed_input)
+        else:
+            print("DEBUG: Calling {function_name}(*parsed_input)", file=sys.stderr)
+            result = {function_name}(*parsed_input)
         print(json.dumps(result) if not isinstance(result, str) else result)
     else:
         exec(compile('''{code}''', '<string>', 'exec'))
 except Exception as e:
-    print(f"Error: {{e}}")
+    print(f"Error: {{e}}", file=sys.stderr)
     sys.exit(1)
 """
                 logging.info(f"Generated Python code for execution:\n{modified_code}")
