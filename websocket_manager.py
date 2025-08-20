@@ -1,57 +1,65 @@
+from fastapi import WebSocket
+from typing import List, Dict
 import json
-import asyncio
-from typing import Dict, List
-from fastapi import WebSocket, WebSocketDisconnect
-from datetime import datetime
-import logging
-
-logger = logging.getLogger(__name__)
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: Dict[int, List[WebSocket]] = {}
+        self.active_connections: List[WebSocket] = []
+        self.user_connections: Dict[int, WebSocket] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: int):
+    async def connect(self, websocket: WebSocket):
         await websocket.accept()
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = []
-        self.active_connections[user_id].append(websocket)
-        logger.info(f"User {user_id} connected via WebSocket")
+        self.active_connections.append(websocket)
+        print(f"WebSocket connection established. Total connections: {len(self.active_connections)}")
 
-    def disconnect(self, websocket: WebSocket, user_id: int):
-        if user_id in self.active_connections:
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        
+        # Remove from user connections
+        user_to_remove = None
+        for user_id, ws in self.user_connections.items():
+            if ws == websocket:
+                user_to_remove = user_id
+                break
+        
+        if user_to_remove:
+            del self.user_connections[user_to_remove]
+        
+        print(f"WebSocket connection closed. Total connections: {len(self.active_connections)}")
+
+    async def send_personal_message(self, message: str, websocket: WebSocket):
+        try:
+            await websocket.send_text(message)
+        except Exception as e:
+            print(f"Error sending personal message: {e}")
+            self.disconnect(websocket)
+
+    async def broadcast(self, message: dict):
+        if not self.active_connections:
+            return
+        
+        message_str = json.dumps(message)
+        disconnected_connections = []
+        
+        for connection in self.active_connections:
             try:
-                self.active_connections[user_id].remove(websocket)
-                if not self.active_connections[user_id]:
-                    del self.active_connections[user_id]
-            except ValueError:
-                pass  # Connection already removed
-        logger.info(f"User {user_id} disconnected from WebSocket")
-    
-    async def send_personal_message(self, message: dict, user_id: int):
-        websockets = self.active_connections.get(user_id, [])
-        for ws in websockets:
-            try:
-                await ws.send_json(message)
+                await connection.send_text(message_str)
             except Exception as e:
-                logger.error(f"Error sending message to user {user_id}: {e}")
+                print(f"Error broadcasting to connection: {e}")
+                disconnected_connections.append(connection)
+        
+        # Remove disconnected connections
+        for connection in disconnected_connections:
+            self.disconnect(connection)
 
-    async def send_notification(self, user_id: int, title: str, message: str, action_url: str = None):
-        notification = {
-            "type": "notification",
-            "data": {
-                "title": title,
-                "message": message,
-                "action_url": action_url,
-                "timestamp": datetime.now().isoformat()
-            }
-        }
-        await self.send_personal_message(notification, user_id)
-
-    def get_user_connection_count(self, user_id: int) -> int:
-        return len(self.active_connections.get(user_id, []))
-
-    def get_total_connections(self) -> int:
-        return sum(len(connections) for connections in self.active_connections.values())
+    async def send_to_user(self, user_id: int, message: dict):
+        if user_id in self.user_connections:
+            websocket = self.user_connections[user_id]
+            try:
+                await websocket.send_text(json.dumps(message))
+            except Exception as e:
+                print(f"Error sending to user {user_id}: {e}")
+                self.disconnect(websocket)
 
 manager = ConnectionManager()

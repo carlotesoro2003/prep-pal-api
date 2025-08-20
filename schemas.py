@@ -404,7 +404,18 @@ class AIChatMessageResponse(BaseModel):
     ai_message: str
     feedback: Optional[str] = None
     followUpQuestion: Optional[str] = None
+
+
     
+class NotificationRequest(BaseModel):
+    user_id: int
+    title: str
+    message: str
+
+class SystemNotificationRequest(BaseModel):
+    user_id: int
+    title: str
+    message: str
 
 
 class NotificationResponse(BaseModel):
@@ -412,14 +423,11 @@ class NotificationResponse(BaseModel):
     title: str
     message: str
     type: str
-    action_url: str = None
+    action_url: Optional[str] = None
     is_read: bool
     created_at: datetime
 
     class Config:
         from_attributes = True
 
-class SendNotificationRequest(BaseModel):
-    title: str
-    message: str
-    action_url: str = None
+
