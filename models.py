@@ -1,7 +1,7 @@
 from db import Base
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, ForeignKey, Boolean, TIMESTAMP,
-    ARRAY, DECIMAL, func, JSON
+    ARRAY, DECIMAL, func, JSON, Index
 )
 from sqlalchemy.orm import relationship
 
@@ -292,3 +292,7 @@ class Notification(Base):
 
     
     user = relationship("User", back_populates="notifications")
+
+# Indexes for performance
+Index('ix_notifications_user_id', Notification.user_id)
+Index('ix_notifications_created_at', Notification.created_at)

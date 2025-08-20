@@ -19,25 +19,25 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Start the notification worker
-    notification_task = asyncio.create_task(session_notification_worker())
-    yield
-    # Cancel the task on shutdown
-    notification_task.cancel()
-    try:
-        await notification_task
-    except asyncio.CancelledError:
-        pass
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     # Start the notification worker
+#     notification_task = asyncio.create_task(session_notification_worker())
+#     yield
+#     # Cancel the task on shutdown
+#     notification_task.cancel()
+#     try:
+#         await notification_task
+#     except asyncio.CancelledError:
+#         pass
 
 
 # Initialize FastAPI app
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(session_notification_worker())
+# @app.on_event("startup")
+# async def startup_event():
+#     asyncio.create_task(session_notification_worker())
 
 # CORS middleware - IMPORTANT: This must be configured correctly
 app.add_middleware(    
